@@ -1,0 +1,6 @@
+{
+  "name": "EzyERP - Sistem Manajemen Usaha & Pembukuan Real-time",
+  "description": "Aplikasi ERP & pembukuan terpadu UMKM: catat kas, kelola stok & HPP, transaksi rutin, laporan bank, kartu nama digital, dan katalog produk.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
