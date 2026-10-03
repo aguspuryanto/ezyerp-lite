@@ -151,3 +151,10 @@ export interface PaymentGatewayChannel {
   isEnabled: boolean;
   instructions: string[];
 }
+
+export interface MonthlySalesTarget {
+  targetAmount: number;
+  periodMonth: string; // YYYY-MM
+  updatedAt: string;
+}
+

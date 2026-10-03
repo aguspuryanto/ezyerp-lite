@@ -64,6 +64,9 @@ interface ERPContextType {
   paymentChannels: PaymentGatewayChannel[];
   togglePaymentChannel: (id: string) => void;
 
+  monthlySalesTarget: number;
+  updateMonthlySalesTarget: (target: number) => void;
+
   notifications: SmartNotification[];
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -94,7 +97,8 @@ const STORAGE_KEYS = {
   SCHEDULES: 'ezyerp_schedules',
   PAYSLIPS: 'ezyerp_payslips',
   PAYMENT_CHANNELS: 'ezyerp_payment_channels',
-  SYNC_ROOM: 'ezyerp_sync_room_code'
+  SYNC_ROOM: 'ezyerp_sync_room_code',
+  MONTHLY_TARGET: 'ezyerp_monthly_sales_target'
 };
 
 export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -119,6 +123,11 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.PROFILE);
     return saved ? JSON.parse(saved) : INITIAL_BUSINESS_PROFILE;
+  });
+
+  const [monthlySalesTarget, setMonthlySalesTarget] = useState<number>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.MONTHLY_TARGET);
+    return saved ? Number(saved) : 15000000; // Rp 15.000.000 target default
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
@@ -200,6 +209,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (payload.schedules) setSchedules(payload.schedules);
           if (payload.payslips) setPayslips(payload.payslips);
           if (payload.paymentChannels) setPaymentChannels(payload.paymentChannels);
+          if (typeof payload.monthlySalesTarget === 'number') setMonthlySalesTarget(payload.monthlySalesTarget);
           setLastSynced(new Date().toLocaleTimeString('id-ID'));
         }
       };
@@ -266,6 +276,16 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.PAYMENT_CHANNELS, JSON.stringify(paymentChannels));
   }, [paymentChannels]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.MONTHLY_TARGET, monthlySalesTarget.toString());
+  }, [monthlySalesTarget]);
+
+  const updateMonthlySalesTarget = (target: number) => {
+    const validTarget = Math.max(1000000, target);
+    setMonthlySalesTarget(validTarget);
+    broadcastSync({ monthlySalesTarget: validTarget });
+  };
 
   // Profile actions
   const updateBusinessProfile = (profile: Partial<BusinessProfile>) => {
@@ -740,7 +760,8 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       attendance,
       schedules,
       payslips,
-      paymentChannels
+      paymentChannels,
+      monthlySalesTarget
     };
     return JSON.stringify(db, null, 2);
   };
@@ -759,6 +780,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.schedules) setSchedules(data.schedules);
       if (data.payslips) setPayslips(data.payslips);
       if (data.paymentChannels) setPaymentChannels(data.paymentChannels);
+      if (typeof data.monthlySalesTarget === 'number') setMonthlySalesTarget(data.monthlySalesTarget);
 
       broadcastSync(data);
       setLastSynced(new Date().toLocaleTimeString('id-ID'));
@@ -778,6 +800,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSchedules(INITIAL_SCHEDULES);
     setPayslips(INITIAL_PAYSLIPS);
     setPaymentChannels(INITIAL_PAYMENT_CHANNELS);
+    setMonthlySalesTarget(15000000);
     setDismissedNotifications([]);
     localStorage.removeItem('ezyerp_dismissed_notifications');
     setLastSynced(new Date().toLocaleTimeString('id-ID'));
@@ -817,6 +840,8 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deletePayslip,
         paymentChannels,
         togglePaymentChannel,
+        monthlySalesTarget,
+        updateMonthlySalesTarget,
         notifications,
         markNotificationRead,
         markAllNotificationsRead,
