@@ -9,7 +9,8 @@ import {
   Payslip,
   BusinessProfile,
   SmartNotification,
-  PaymentGatewayChannel
+  PaymentGatewayChannel,
+  CategoryBudget
 } from '../types/erp';
 import {
   INITIAL_BUSINESS_PROFILE,
@@ -20,7 +21,8 @@ import {
   INITIAL_ATTENDANCE,
   INITIAL_SCHEDULES,
   INITIAL_PAYSLIPS,
-  INITIAL_PAYMENT_CHANNELS
+  INITIAL_PAYMENT_CHANNELS,
+  INITIAL_CATEGORY_BUDGETS
 } from '../data/initialData';
 
 interface ERPContextType {
@@ -64,6 +66,13 @@ interface ERPContextType {
   paymentChannels: PaymentGatewayChannel[];
   togglePaymentChannel: (id: string) => void;
 
+  categoryBudgets: CategoryBudget[];
+  updateCategoryBudget: (category: string, updates: Partial<CategoryBudget>) => void;
+
+  desktopNotificationEnabled: boolean;
+  requestDesktopNotificationPermission: () => Promise<boolean>;
+  triggerDesktopNotification: (title: string, body: string) => void;
+
   monthlySalesTarget: number;
   updateMonthlySalesTarget: (target: number) => void;
 
@@ -98,7 +107,8 @@ const STORAGE_KEYS = {
   PAYSLIPS: 'ezyerp_payslips',
   PAYMENT_CHANNELS: 'ezyerp_payment_channels',
   SYNC_ROOM: 'ezyerp_sync_room_code',
-  MONTHLY_TARGET: 'ezyerp_monthly_sales_target'
+  MONTHLY_TARGET: 'ezyerp_monthly_sales_target',
+  BUDGETS: 'ezyerp_category_budgets'
 };
 
 export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -128,6 +138,15 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [monthlySalesTarget, setMonthlySalesTarget] = useState<number>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.MONTHLY_TARGET);
     return saved ? Number(saved) : 15000000; // Rp 15.000.000 target default
+  });
+
+  const [categoryBudgets, setCategoryBudgets] = useState<CategoryBudget[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.BUDGETS);
+    return saved ? JSON.parse(saved) : INITIAL_CATEGORY_BUDGETS;
+  });
+
+  const [desktopNotificationEnabled, setDesktopNotificationEnabled] = useState(() => {
+    return typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
   });
 
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
@@ -209,6 +228,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (payload.schedules) setSchedules(payload.schedules);
           if (payload.payslips) setPayslips(payload.payslips);
           if (payload.paymentChannels) setPaymentChannels(payload.paymentChannels);
+          if (payload.categoryBudgets) setCategoryBudgets(payload.categoryBudgets);
           if (typeof payload.monthlySalesTarget === 'number') setMonthlySalesTarget(payload.monthlySalesTarget);
           setLastSynced(new Date().toLocaleTimeString('id-ID'));
         }
@@ -281,6 +301,53 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(STORAGE_KEYS.MONTHLY_TARGET, monthlySalesTarget.toString());
   }, [monthlySalesTarget]);
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(categoryBudgets));
+  }, [categoryBudgets]);
+
+  const updateCategoryBudget = (category: string, updates: Partial<CategoryBudget>) => {
+    setCategoryBudgets(prev => {
+      const updated = prev.map(b => b.category === category ? { ...b, ...updates } : b);
+      broadcastSync({ categoryBudgets: updated });
+      return updated;
+    });
+  };
+
+  const requestDesktopNotificationPermission = async (): Promise<boolean> => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return false;
+    try {
+      const permission = await Notification.requestPermission();
+      const granted = permission === 'granted';
+      setDesktopNotificationEnabled(granted);
+      if (granted) {
+        try {
+          new Notification('EzyERP Notifikasi Anggaran Aktif', {
+            body: 'Sistem peringatan anggaran cerdas aktif. Anda akan menerima notifikasi desktop jika pengeluaran melebihi batas.',
+            icon: '/favicon.ico'
+          });
+        } catch {
+          // ignore
+        }
+      }
+      return granted;
+    } catch {
+      return false;
+    }
+  };
+
+  const triggerDesktopNotification = useCallback((title: string, body: string) => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(title, {
+          body,
+          icon: '/favicon.ico'
+        });
+      } catch {
+        // Notification permission fallback
+      }
+    }
+  }, []);
+
   const updateMonthlySalesTarget = (target: number) => {
     const validTarget = Math.max(1000000, target);
     setMonthlySalesTarget(validTarget);
@@ -302,6 +369,35 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...tx,
       id: 'tx-' + Date.now()
     };
+
+    // Smart Budget Threshold Check for new Expense Transactions
+    if (tx.type === 'expense') {
+      const currentMonthKey = tx.date.slice(0, 7);
+      const budgetConfig = categoryBudgets.find(b => b.category === tx.category && b.isEnabled);
+
+      if (budgetConfig) {
+        // Calculate prior month spent in this category
+        const priorSpent = transactions
+          .filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey) && t.category === tx.category)
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        const newTotalSpent = priorSpent + tx.amount;
+        const newPercent = (newTotalSpent / budgetConfig.monthlyLimit) * 100;
+
+        if (newTotalSpent >= budgetConfig.monthlyLimit) {
+          triggerDesktopNotification(
+            `🚨 Over Budget: ${tx.category}!`,
+            `Pengeluaran baru Rp ${tx.amount.toLocaleString('id-ID')} membuat total ${tx.category} mencapai Rp ${newTotalSpent.toLocaleString('id-ID')} (Melampaui budget Rp ${budgetConfig.monthlyLimit.toLocaleString('id-ID')}).`
+          );
+        } else if (newPercent >= budgetConfig.warningThresholdPercent && (priorSpent / budgetConfig.monthlyLimit) * 100 < budgetConfig.warningThresholdPercent) {
+          triggerDesktopNotification(
+            `⚠️ Peringatan Anggaran: ${tx.category}`,
+            `Total pengeluaran ${tx.category} kini mencapai ${Math.round(newPercent)}% dari batas bulanan Rp ${budgetConfig.monthlyLimit.toLocaleString('id-ID')}.`
+          );
+        }
+      }
+    }
+
     setTransactions(prev => {
       const updated = [newTx, ...prev];
       broadcastSync({ transactions: updated });
@@ -720,8 +816,48 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
+    // 4. Smart Expense Category Budget Alerts
+    const currentMonthKey = todayStr.slice(0, 7);
+    const categorySpentMap: Record<string, number> = {};
+    transactions.forEach(t => {
+      if (t.type === 'expense' && t.date.startsWith(currentMonthKey)) {
+        categorySpentMap[t.category] = (categorySpentMap[t.category] || 0) + t.amount;
+      }
+    });
+
+    categoryBudgets.forEach(b => {
+      if (!b.isEnabled) return;
+      const spent = categorySpentMap[b.category] || 0;
+      const percent = (spent / b.monthlyLimit) * 100;
+      const notifBaseId = `notif-budget-${b.category.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+
+      if (spent >= b.monthlyLimit) {
+        list.push({
+          id: `${notifBaseId}-exceeded`,
+          type: 'budget',
+          title: `Over Budget: ${b.category}`,
+          message: `Pengeluaran bulan ini Rp ${spent.toLocaleString('id-ID')} telah MELAMPAUI batas pagu Rp ${b.monthlyLimit.toLocaleString('id-ID')} (${Math.round(percent)}%).`,
+          date: todayStr,
+          read: dismissedNotifications.includes(`${notifBaseId}-exceeded`),
+          severity: 'danger',
+          linkTarget: 'cashflow'
+        });
+      } else if (percent >= b.warningThresholdPercent) {
+        list.push({
+          id: `${notifBaseId}-warning`,
+          type: 'budget',
+          title: `Mendekati Batas Budget: ${b.category}`,
+          message: `Pengeluaran Rp ${spent.toLocaleString('id-ID')} telah mencapai ${Math.round(percent)}% dari batas Rp ${b.monthlyLimit.toLocaleString('id-ID')} (Ambang batas waspada: ${b.warningThresholdPercent}%).`,
+          date: todayStr,
+          read: dismissedNotifications.includes(`${notifBaseId}-warning`),
+          severity: 'warning',
+          linkTarget: 'cashflow'
+        });
+      }
+    });
+
     return list;
-  }, [products, recurring, payslips, dismissedNotifications]);
+  }, [products, recurring, payslips, dismissedNotifications, categoryBudgets, transactions]);
 
   const markNotificationRead = (id: string) => {
     setDismissedNotifications(prev => {
@@ -761,7 +897,8 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       schedules,
       payslips,
       paymentChannels,
-      monthlySalesTarget
+      monthlySalesTarget,
+      categoryBudgets
     };
     return JSON.stringify(db, null, 2);
   };
@@ -781,6 +918,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.payslips) setPayslips(data.payslips);
       if (data.paymentChannels) setPaymentChannels(data.paymentChannels);
       if (typeof data.monthlySalesTarget === 'number') setMonthlySalesTarget(data.monthlySalesTarget);
+      if (data.categoryBudgets) setCategoryBudgets(data.categoryBudgets);
 
       broadcastSync(data);
       setLastSynced(new Date().toLocaleTimeString('id-ID'));
@@ -801,6 +939,7 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPayslips(INITIAL_PAYSLIPS);
     setPaymentChannels(INITIAL_PAYMENT_CHANNELS);
     setMonthlySalesTarget(15000000);
+    setCategoryBudgets(INITIAL_CATEGORY_BUDGETS);
     setDismissedNotifications([]);
     localStorage.removeItem('ezyerp_dismissed_notifications');
     setLastSynced(new Date().toLocaleTimeString('id-ID'));
@@ -840,6 +979,11 @@ export const ERPProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deletePayslip,
         paymentChannels,
         togglePaymentChannel,
+        categoryBudgets,
+        updateCategoryBudget,
+        desktopNotificationEnabled,
+        requestDesktopNotificationPermission,
+        triggerDesktopNotification,
         monthlySalesTarget,
         updateMonthlySalesTarget,
         notifications,

@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useERP } from '../../context/ERPContext';
+import { SalesForecastModule } from './SalesForecastModule';
+import { BudgetMonitoringModule } from './BudgetMonitoringModule';
 import {
   TrendingUp,
   TrendingDown,
@@ -399,6 +401,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Machine-Learning Based Sales Forecasting Module */}
+      <SalesForecastModule setCurrentTab={setCurrentTab} />
+
+      {/* Smart Budget Monitoring System with Real-Time Desktop Notifications & Visual Alerts */}
+      <BudgetMonitoringModule setCurrentTab={setCurrentTab} />
 
       {/* Main KPI Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

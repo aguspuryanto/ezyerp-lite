@@ -130,13 +130,20 @@ export interface BusinessProfile {
 
 export interface SmartNotification {
   id: string;
-  type: 'stock' | 'bill' | 'payroll' | 'payment';
+  type: 'stock' | 'bill' | 'payroll' | 'payment' | 'budget';
   title: string;
   message: string;
   date: string;
   read: boolean;
   severity: 'warning' | 'danger' | 'info' | 'success';
   linkTarget?: string;
+}
+
+export interface CategoryBudget {
+  category: string;
+  monthlyLimit: number; // in Rupiah
+  warningThresholdPercent: number; // e.g. 80 (80%)
+  isEnabled: boolean;
 }
 
 export interface PaymentGatewayChannel {

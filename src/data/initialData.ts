@@ -196,6 +196,46 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     paymentMethod: 'mandiri',
     reference: 'INV-2026-09-88',
     contactName: 'Resto Kenari Senopati'
+  },
+  {
+    id: 'tx-009',
+    date: '2026-09-15',
+    type: 'income',
+    category: 'Penjualan Kasir POS',
+    amount: 5800000,
+    description: 'Omzet Penjualan Kasir Pertengahan Bulan',
+    paymentMethod: 'qris',
+    reference: 'POS-260915-MID'
+  },
+  {
+    id: 'tx-010',
+    date: '2026-08-28',
+    type: 'income',
+    category: 'Penjualan Kasir POS',
+    amount: 6200000,
+    description: 'Rekap Penjualan Event Kemerdekaan Toko',
+    paymentMethod: 'qris',
+    reference: 'POS-260828-EVT'
+  },
+  {
+    id: 'tx-011',
+    date: '2026-08-12',
+    type: 'income',
+    category: 'Penjualan B2B',
+    amount: 4500000,
+    description: 'Pengadaan Biji Kopi Perkantoran Sudirman',
+    paymentMethod: 'bca',
+    reference: 'INV-2026-08-12'
+  },
+  {
+    id: 'tx-012',
+    date: '2026-07-25',
+    type: 'income',
+    category: 'Penjualan Online',
+    amount: 4900000,
+    description: 'Order E-Commerce & Pesanan Luar Kota',
+    paymentMethod: 'bca',
+    reference: 'ONL-260725-ALL'
   }
 ];
 
@@ -526,3 +566,49 @@ export const INITIAL_PAYMENT_CHANNELS: PaymentGatewayChannel[] = [
     ]
   }
 ];
+
+export const INITIAL_CATEGORY_BUDGETS = [
+  {
+    category: 'Operasional & Listrik',
+    monthlyLimit: 1000000,
+    warningThresholdPercent: 80,
+    isEnabled: true
+  },
+  {
+    category: 'Bahan Baku & Stok',
+    monthlyLimit: 6000000,
+    warningThresholdPercent: 80,
+    isEnabled: true
+  },
+  {
+    category: 'Sewa Tempat',
+    monthlyLimit: 5000000,
+    warningThresholdPercent: 80,
+    isEnabled: true
+  },
+  {
+    category: 'Gaji Karyawan',
+    monthlyLimit: 12000000,
+    warningThresholdPercent: 85,
+    isEnabled: true
+  },
+  {
+    category: 'Pemasaran & Iklan',
+    monthlyLimit: 1500000,
+    warningThresholdPercent: 75,
+    isEnabled: true
+  },
+  {
+    category: 'Peralatan & Aset',
+    monthlyLimit: 2500000,
+    warningThresholdPercent: 80,
+    isEnabled: true
+  },
+  {
+    category: 'Biaya Lainnya',
+    monthlyLimit: 1000000,
+    warningThresholdPercent: 80,
+    isEnabled: true
+  }
+];
+
